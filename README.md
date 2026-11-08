@@ -1,19 +1,31 @@
 # JARVIS
 
-A voice-first personal assistant that runs as a static site on GitHub Pages.
+A voice-first personal assistant that runs in the browser. Conversations, memory, settings, and generated images are stored locally on the device/browser profile.
 
-- **Brain:** Groq (your own key, pasted in Settings). Replies keep a dry British-butler tone.
-- **Voice:** push-to-talk mic, plus a Wake word mode that listens for "Jarvis". Replies are spoken aloud.
-- **Skills (instant, no AI):** time, date, battery, weather, diagnostics, timers, open YouTube/Google/GitHub/Maps/Gmail/Wikipedia, remember/forget facts.
-- **Vision:** camera with hand tracking, ported from SPECTRA-V2. Open palm starts listening, thumbs up says "Very good, sir", fist stops speech, victory runs diagnostics.
-- **From ORACLE:** quick-reply chips and chat export.
+## Capabilities
+
+- **Brain:** Groq (your own key, entered in Settings).
+- **Voice:** push-to-talk, wake word, and spoken replies.
+- **Local skills:** time, date, battery, weather, diagnostics, timers, open common sites, and remember/forget facts.
+- **Web search:** say `search for …` or `look up …` to open live Google results in a new tab.
+- **Image search:** say `image search …` or `find images of …` to open Google Images.
+- **Image generation:** say `generate an image of …`. Requires a Pollinations key entered in Settings; generated image files are saved in this browser's IndexedDB and can be downloaded.
+- **Vision:** camera hand tracking runs in the browser; camera frames are not uploaded by the hand-tracking code.
 
 ## Setup
-1. Get a key at console.groq.com and paste it in **Settings**. It stays in your browser and is sent only to Groq.
-2. Use Chrome or Edge for speech. Allow the microphone (and camera for Vision).
-3. Wake word only works while the tab is open.
 
-## Security notes
-- Never commit a key. The page's Content-Security-Policy allows only Groq, Open-Meteo, and the MediaPipe CDN/model host.
-- Keys are held per tab by default. "Remember on this device" stores them in localStorage, which every page on your github.io account can read.
-- Speech recognition is done by your browser vendor's service, so audio leaves the device.
+1. Get a Groq API key and enter it in Settings.
+2. For image generation, get a Pollinations key from https://enter.pollinations.ai/ and enter it in Settings.
+3. Use Chrome or Edge for speech. Allow microphone/camera permissions only if you want those features.
+
+## Device-local storage and privacy
+
+- Chat history, remembered facts, model preference, voice preference, and API keys are stored in this browser's local storage (the Groq key can instead be session-only).
+- Generated images are stored in this browser's IndexedDB.
+- This is device/browser-profile local storage, not encrypted vault storage. Anyone with access to this browser profile may be able to access it. Clearing browser site data removes it; use Export chat to keep a copy.
+- When used, Groq receives chat prompts, Pollinations receives image prompts, Google receives search queries, and Open-Meteo receives weather coordinates. These services are not local.
+- Never commit API keys to GitHub. Do not paste passwords or provider account tokens into the chat.
+
+## Integrations not yet connected
+
+Direct Gmail, GitHub, Supabase, and Vercel account actions require provider OAuth/app configuration and a secure server-side authorization layer. They are not enabled merely by adding this frontend. Destructive or external actions should require an explicit approval step.
