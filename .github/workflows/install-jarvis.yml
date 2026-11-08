@@ -1,0 +1,36 @@
+name: Install JARVIS files from uploaded ZIP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/install-jarvis.yml"
+      - "files.zip"
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Extract the supplied JARVIS files
+        run: |
+          unzip -o files.zip -d .
+          test -f index.html
+          test -f app.js
+          test -f vision.js
+          test -f hud.css
+          test -f README.md
+      - name: Commit only the supplied files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html app.js vision.js hud.css README.md
+          if ! git diff --cached --quiet; then
+            git commit -m "Add working JARVIS voice and vision features"
+            git push
+          fi
