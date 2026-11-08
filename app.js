@@ -9,6 +9,7 @@ const thread = $('thread'), empty = $('empty'), messages = $('messages'), input 
   dlg = $('dlg'), telemetry = $('telemetry'), visionBox = $('vision');
 
 const MAX_INPUT_CHARS = 4000;
+const IMAGE_API = 'https://gen.pollinations.ai/image/';
 const API = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-20b';
 const STATUS = { ready: 'Ready', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking', error: 'Something went wrong' };
@@ -36,6 +37,7 @@ function setKey(k, remember) {
 }
 
 let history = load('history'), facts = load('facts');
+let generatedImages = load('generated-images');
 let pending = false, speaking = false, voiceOn = get('voice', '1') === '1';
 let rec = null, listenMode = 'off', awaitUntil = 0, visionOn = false, batt = null;
 
@@ -86,6 +88,33 @@ function addMessage(role, raw, chips = true) {
   }
   scrollToEnd();
   return text;
+}
+
+function addImageMessage(prompt, url) {
+  const body = bubble('assistant');
+  const p = document.createElement('p'); p.className = 'msg-text'; p.textContent = 'Image generated: ' + prompt;
+  const img = document.createElement('img'); img.className = 'generated-image'; img.alt = prompt; img.loading = 'lazy'; img.src = url;
+  body.append(p, img);
+  const save = document.createElement('a'); save.textContent = 'Download image'; save.href = url; save.download = 'jarvis-generated-image.png';
+  save.style.cssText = 'display:inline-block;margin-top:8px;color:var(--cyan)';
+  body.append(save);
+  return body;
+}
+
+async function generateImage(prompt) {
+  const key = get('pollinations-key');
+  if (!key) return { ok:false, message:'Add a Pollinations image key in Settings first. JARVIS keeps it in this browser only.' };
+  const url = IMAGE_API + encodeURIComponent(prompt) + '?model=black-forest-labs/flux.1-schnell&width=1024&height=1024';
+  try {
+    const response = await fetch(url, { headers: { Authorization: 'Bearer ' + key } });
+    if (!response.ok) return { ok:false, message: response.status === 401 ? 'Pollinations rejected the key. Check it in Settings.' : 'Image generation failed (' + response.status + '). Check your Pollinations key or balance.' };
+    const blob = await response.blob();
+    const localUrl = URL.createObjectURL(blob);
+    generatedImages = [...generatedImages, { prompt, createdAt: Date.now() }].slice(-30);
+    put('generated-images', JSON.stringify(generatedImages));
+    addImageMessage(prompt, localUrl);
+    return { ok:true, text:'Your image is ready, sir.' };
+  } catch { return { ok:false, message:'Could not reach the image generator. Check your connection.' }; }
 }
 
 function addTyping() {
@@ -198,6 +227,18 @@ function setTimer(n, unit) {
 }
 
 async function skill(t) {
+  const imageMatch = t.match(/^(?:generate|create|make|draw) (?:an? )?(?:image|picture|artwork) (?:of |showing )?(.+)/i);
+  if (imageMatch) return await generateImage(imageMatch[1].trim());
+  const imageSearch = t.match(/^(?:image search|find images of|show images of) (.+)/i);
+  if (imageSearch) {
+    window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(imageSearch[1].trim()), '_blank', 'noopener');
+    return 'Opening image search results for ' + imageSearch[1].trim() + ', sir.';
+  }
+  const webSearch = t.match(/^(?:search(?: the web)? for|look up|web search) (.+)/i);
+  if (webSearch) {
+    window.open('https://www.google.com/search?q=' + encodeURIComponent(webSearch[1].trim()), '_blank', 'noopener');
+    return 'Opening live web search results for ' + webSearch[1].trim() + ', sir.';
+  }
   const s = t.toLowerCase().trim();
   let m;
   if (/\b(time is it|what['’]?s the time|what is the time|current time)\b/.test(s)) return `It is ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`;
@@ -233,7 +274,7 @@ function systemPrompt() {
 async function getReply(text) {
   let local;
   try { local = await skill(text); } catch (e) { local = `That did not work: ${e.message || 'unknown error'}.`; }
-  if (local) return { ok: true, text: local };
+  if (local) return typeof local === 'object' ? local : { ok: true, text: local };
   const key = getKey();
   if (!key) return { ok: false, message: 'No Groq API key yet. Open Settings and paste one.' };
   const model = get('model', DEFAULT_MODEL);
@@ -339,12 +380,13 @@ voiceBtn.addEventListener('click', () => {
 visionBtn.addEventListener('click', () => toggleVision());
 
 settingsBtn.addEventListener('click', () => {
-  $('key').value = getKey(); $('remember').checked = remembered(); $('model').value = get('model', DEFAULT_MODEL);
+  $('key').value = getKey(); $('remember').checked = remembered(); $('model').value = get('model', DEFAULT_MODEL); $('pollinationsKey').value = get('pollinations-key');
   dlg.showModal();
 });
 $('save').addEventListener('click', () => {
   setKey($('key').value.trim(), $('remember').checked);
   put('model', $('model').value.trim() || DEFAULT_MODEL);
+  put('pollinations-key', $('pollinationsKey').value.trim());
   dlg.close();
 });
 $('forget').addEventListener('click', () => { setKey('', false); $('key').value = ''; });
