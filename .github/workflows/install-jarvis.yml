@@ -1,6 +1,7 @@
 name: Install JARVIS files from uploaded ZIP
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
