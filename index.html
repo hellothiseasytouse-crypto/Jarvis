@@ -4,9 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'" />
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src https://api.groq.com https://api.open-meteo.com https://cdn.jsdelivr.net https://storage.googleapis.com; base-uri 'none'; form-action 'none'" />
   <title>JARVIS</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="hud.css" />
 </head>
 <body data-state="ready">
   <div class="app">
@@ -14,20 +15,29 @@
       <div class="core" aria-hidden="true"><span class="core-ring"></span><span class="core-dot"></span></div>
       <h1 class="name">JARVIS</h1>
       <p class="status" id="status" role="status" aria-live="polite">Ready</p>
+      <button class="tbtn" id="voice" type="button" aria-pressed="true" title="Speak replies aloud">Voice</button>
+      <button class="tbtn" id="visionBtn" type="button" aria-pressed="false" title="Camera with hand tracking">Vision</button>
+      <button class="tbtn" id="settings" type="button">Settings</button>
     </header>
+    <p class="telemetry" id="telemetry"></p>
+
+    <section class="vision" id="vision" hidden aria-label="Vision">
+      <video id="cam" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <p class="vbar"><span id="vstatus"></span><span id="vgesture"></span></p>
+    </section>
 
     <main class="thread" id="thread" aria-label="Conversation">
       <div class="empty" id="empty">
-        <p class="empty-title">Ask JARVIS anything</p>
-        <p class="empty-body">Replies are placeholders until Groq is connected in the next step. Type <code>/fail</code> to preview the error state.</p>
+        <p class="empty-title">At your service</p>
+        <p class="empty-body">Add your Groq key in Settings, then type, press the mic, or turn on Wake word and say “Jarvis”. Try “run diagnostics”, “set a timer for 5 minutes” or “open YouTube”.</p>
       </div>
       <ol class="messages" id="messages"></ol>
     </main>
 
     <footer class="composer">
       <div class="composer-box">
-        <button class="icon-btn" id="mic" type="button" disabled
-                aria-label="Voice input" title="Voice input comes later">
+        <button class="icon-btn" id="mic" type="button" aria-label="Voice input" title="Speak one command">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="9" y="3" width="6" height="11" rx="3"></rect>
             <path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>
@@ -36,9 +46,30 @@
         <textarea id="input" rows="1" maxlength="4000" placeholder="Message JARVIS" aria-label="Message"></textarea>
         <button class="send-btn" id="send" type="button">Send</button>
       </div>
-      <p class="hint">Enter to send, Shift+Enter for a new line</p>
+      <div class="hint">
+        <button class="tbtn" id="wake" type="button" aria-pressed="false" title="Always listen for the word Jarvis">Wake word</button>
+        <span>Enter to send, Shift+Enter for a new line</span>
+      </div>
     </footer>
   </div>
+
+  <dialog id="dlg" aria-label="Settings">
+    <h2>Settings</h2>
+    <label for="key">Groq API key</label>
+    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_…" />
+    <label class="check"><input id="remember" type="checkbox" /> Remember on this device</label>
+    <label for="model">Model</label>
+    <input id="model" type="text" spellcheck="false" />
+    <p class="note">The key stays in this browser and is sent only to Groq. Never commit it to GitHub.</p>
+    <div class="row">
+      <button class="send-btn" id="save" type="button">Save</button>
+      <button class="tbtn" id="forget" type="button">Forget key</button>
+      <button class="tbtn" id="export" type="button">Export chat</button>
+      <button class="tbtn" id="clear" type="button">Clear chat</button>
+      <button class="tbtn" id="close" type="button">Close</button>
+    </div>
+  </dialog>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
