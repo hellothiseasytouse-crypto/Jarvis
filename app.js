@@ -90,6 +90,36 @@ function addMessage(role, raw, chips = true) {
   return text;
 }
 
+function openMediaDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('jarvis-media', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('images', { keyPath: 'id' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function saveImageLocally(blob, prompt) {
+  const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+  const db = await openMediaDB();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('images', 'readwrite');
+    tx.objectStore('images').put({ id, prompt, blob, createdAt: Date.now() });
+    tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return id;
+}
+async function readImageLocally(id) {
+  const db = await openMediaDB();
+  const item = await new Promise((resolve, reject) => {
+    const tx = db.transaction('images', 'readonly');
+    const request = tx.objectStore('images').get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return item;
+}
 function addImageMessage(prompt, url) {
   const body = bubble('assistant');
   const p = document.createElement('p'); p.className = 'msg-text'; p.textContent = 'Image generated: ' + prompt;
@@ -404,5 +434,11 @@ $('export').addEventListener('click', () => {
 });
 
 history.forEach((m) => addMessage(m.role === 'user' ? 'user' : 'assistant', m.content, false));
+generatedImages.forEach(async (item) => {
+  try {
+    const saved = await readImageLocally(item.id);
+    if (saved?.blob) addImageMessage(saved.prompt, URL.createObjectURL(saved.blob));
+  } catch { /* browser storage may have been cleared */ }
+});
 synth?.getVoices(); // warms up the voice list
 input.focus();
