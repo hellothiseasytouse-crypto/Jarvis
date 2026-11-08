@@ -37,7 +37,6 @@ function setKey(k, remember) {
 }
 
 let history = load('history'), facts = load('facts');
-let generatedImages = load('generated-images');
 let pending = false, speaking = false, voiceOn = get('voice', '1') === '1';
 let rec = null, listenMode = 'off', awaitUntil = 0, visionOn = false, batt = null;
 
@@ -140,10 +139,9 @@ async function generateImage(prompt) {
     if (!response.ok) return { ok:false, message: response.status === 401 ? 'Pollinations rejected the key. Check it in Settings.' : 'Image generation failed (' + response.status + '). Check your Pollinations key or balance.' };
     const blob = await response.blob();
     const localUrl = URL.createObjectURL(blob);
-    generatedImages = [...generatedImages, { prompt, createdAt: Date.now() }].slice(-30);
-    put('generated-images', JSON.stringify(generatedImages));
-    addImageMessage(prompt, localUrl);
-    return { ok:true, text:'Your image is ready, sir.' };
+    const id = await saveImageLocally(blob, prompt);
+    URL.revokeObjectURL(localUrl);
+    return { ok:true, text:'Your image is ready, sir.', image:{ id, prompt } };
   } catch { return { ok:false, message:'Could not reach the image generator. Check your connection.' }; }
 }
 
@@ -310,7 +308,11 @@ async function getReply(text) {
   const model = get('model', DEFAULT_MODEL);
   const body = {
     model, temperature: 0.6, max_completion_tokens: 1024,
-    messages: [{ role: 'system', content: systemPrompt() }, ...history.slice(-16), { role: 'user', content: text }],
+    messages: [
+      { role: 'system', content: systemPrompt() },
+      ...history.filter((m) => typeof m.content === 'string').slice(-16).map(({ role, content }) => ({ role, content })),
+      { role: 'user', content: text },
+    ],
   };
   if (model.includes('gpt-oss')) body.reasoning_effort = 'low';
   try {
@@ -334,8 +336,16 @@ async function submit(text, showUser = true) {
     const r = await getReply(text);
     typing.remove();
     if (r.ok) {
-      history = [...history, { role: 'user', content: text }, { role: 'assistant', content: r.text }].slice(-40);
+      const additions = [{ role: 'user', content: text }];
+      if (r.image) additions.push({ role: 'assistant', type: 'image', imageId: r.image.id, prompt: r.image.prompt });
+      additions.push({ role: 'assistant', content: r.text });
+      history = [...history, ...additions].slice(-40);
       put('history', JSON.stringify(history));
+      if (r.image) {
+        const saved = await readImageLocally(r.image.id);
+        if (saved?.blob) addImageMessage(saved.prompt, URL.createObjectURL(saved.blob));
+        else addError('The image was generated but could not be loaded from local storage.', '');
+      }
       speak(addMessage('assistant', r.text));
     } else { addError(r.message, text); setState('error'); }
   } catch {
@@ -433,12 +443,20 @@ $('export').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
 
-history.forEach((m) => addMessage(m.role === 'user' ? 'user' : 'assistant', m.content, false));
-generatedImages.forEach(async (item) => {
-  try {
-    const saved = await readImageLocally(item.id);
-    if (saved?.blob) addImageMessage(saved.prompt, URL.createObjectURL(saved.blob));
-  } catch { /* browser storage may have been cleared */ }
-});
+(async () => {
+  for (const m of history) {
+    if (m.type === 'image' && m.imageId) {
+      try {
+        const saved = await readImageLocally(m.imageId);
+        if (saved?.blob) addImageMessage(saved.prompt || m.prompt || 'Generated image', URL.createObjectURL(saved.blob));
+        else addError('A saved image is no longer available on this device.', '');
+      } catch {
+        addError('A saved image could not be loaded from this browser.', '');
+      }
+    } else if (typeof m.content === 'string') {
+      addMessage(m.role === 'user' ? 'user' : 'assistant', m.content, false);
+    }
+  }
+})();
 synth?.getVoices(); // warms up the voice list
 input.focus();
